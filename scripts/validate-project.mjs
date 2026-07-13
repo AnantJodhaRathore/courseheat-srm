@@ -17,7 +17,7 @@ const requiredFiles = [
   'src/lib/storage.ts',
   'src/lib/supabase.ts',
   'src/components/Header.tsx',
-  'src/components/AuthDialog.tsx',
+  'src/components/AuthGate.tsx',
   'src/components/Filters.tsx',
   'src/components/StatCards.tsx',
   'src/components/HeatmapGrid.tsx',
@@ -86,6 +86,12 @@ for (const table of ['courses', 'professors', 'reviews', 'users', 'saved_courses
 const auth = fs.readFileSync(path.join(root, 'src/lib/supabase.ts'), 'utf8');
 if (!auth.includes('@srmist.edu.in') || !auth.includes('signInWithOtp')) {
   console.error('Expected SRM email-only magic link authentication.');
+  failed = true;
+}
+
+const authGate = fs.readFileSync(path.join(root, 'src/components/AuthGate.tsx'), 'utf8');
+if (!app.includes('if (!user)') || !app.includes('AuthGate') || app.includes('demoLogin') || authGate.includes('demo student')) {
+  console.error('Expected a mandatory verification gate with no demo bypass.');
   failed = true;
 }
 

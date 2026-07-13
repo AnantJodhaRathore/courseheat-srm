@@ -17,7 +17,7 @@ CourseHeat is a mobile-first course intelligence dashboard for SRM students. It 
 - Weekly timetable calendar with rooms, class types, add/delete controls, and schedule-conflict detection.
 - Independent professor records and direct two-professor comparison across rating, difficulty, workload, A-rate, recommendations, attendance, and review count.
 - Student review reporting with a protected moderation queue.
-- Authenticated Supabase synchronization for saved courses and planner items, with local demo fallback.
+- Authenticated Supabase synchronization for saved courses and planner items, with local caching after verification.
 - CSV import for manual workload and attendance data, full course export, and copyable summaries.
 - Admin moderation UI and a Supabase schema with RLS for catalog, reviews, profiles, saves, tags, and resources.
 - Loading skeletons, empty states, user-friendly errors, and success/error toasts.
@@ -28,7 +28,7 @@ CourseHeat is a mobile-first course intelligence dashboard for SRM students. It 
 - Chart.js + react-chartjs-2
 - Supabase Auth and Postgres-ready data layer
 - Lucide icons and responsive CSS
-- Local-first demo state with `localStorage`
+- Verified-session application gate with local caching for student-owned UI state
 
 ## Run locally
 
@@ -37,7 +37,7 @@ npm ci
 npm run dev
 ```
 
-The UI works immediately with sample data. When Supabase is not configured, the login panel offers an explicitly labeled local demo student session so reviewers can try authenticated flows without entering a real email.
+The application is locked until Supabase restores a verified session. Unauthenticated visitors see only the SRM email verification page; navigation, dashboards, course data, reviews, and tools are not mounted. There is no demo-login bypass. If Supabase is not configured, the gate remains locked and displays setup instructions.
 
 ## Validate and build
 

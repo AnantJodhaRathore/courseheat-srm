@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clipboard, Download, FileUp, Plus, ShieldCheck } from 'lucide-react';
 import { AdminDashboard } from './components/AdminDashboard';
-import { AuthDialog } from './components/AuthDialog';
+import { AuthGate } from './components/AuthGate';
 import { ComparisonPanel } from './components/ComparisonPanel';
 import { CourseCards } from './components/CourseCards';
 import { CourseDetail } from './components/CourseDetail';
@@ -21,7 +21,7 @@ import { DashboardSkeleton } from './components/Skeletons';
 import { StatCards } from './components/StatCards';
 import { ToastStack } from './components/ToastStack';
 import { addReviewToCourse, coursesToCsv, filterCourses, getARate, getRecommendationScore, updateReviewInCourse } from './lib/courseUtils';
-import { loadCourses, loadDemoUserEmail, loadGpaRecords, loadPlanner, loadSavedIds, loadTheme, loadTimetable, saveCourses, saveDemoUserEmail, saveGpaRecords, savePlanner, saveSavedIds, saveTheme, saveTimetable } from './lib/storage';
+import { loadCourses, loadGpaRecords, loadPlanner, loadSavedIds, loadTheme, loadTimetable, saveCourses, saveGpaRecords, savePlanner, saveSavedIds, saveTheme, saveTimetable } from './lib/storage';
 import { supabase } from './lib/supabase';
 import type { AppUser, Course, FiltersState, GpaRecord, NewReviewForm, PlannerItem, Review, TimetableEntry, ToastMessage } from './types';
 
@@ -40,8 +40,8 @@ function App() {
   const [reviewCourse, setReviewCourse] = useState<Course | null>(null);
   const [editingReview, setEditingReview] = useState<Review | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [user, setUser] = useState<AppUser | null>(() => { const email = loadDemoUserEmail(); return email ? { id: 'demo-student', email, isAdmin: false, isDemo: true } : null; });
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [authReady, setAuthReady] = useState(!supabase);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => loadTheme());
   const [view, setView] = useState<View>('dashboard');
   const [loading, setLoading] = useState(true);
@@ -56,19 +56,21 @@ function App() {
   useEffect(() => { saveTimetable(timetableEntries); }, [timetableEntries]);
   useEffect(() => { const id = window.setTimeout(() => setLoading(false), 550); return () => clearTimeout(id); }, []);
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) { setAuthReady(true); return; }
     supabase.auth.getSession().then(({ data }) => {
       const authUser = data.session?.user;
       if (authUser?.email?.endsWith('@srmist.edu.in')) setUser({ id: authUser.id, email: authUser.email, isAdmin: authUser.app_metadata?.role === 'admin' });
-    }).catch(() => notify('Could not restore your login session.', 'error'));
+      else setUser(null);
+    }).catch(() => notify('Could not restore your login session.', 'error')).finally(() => setAuthReady(true));
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const authUser = session?.user;
       if (authUser?.email?.endsWith('@srmist.edu.in')) setUser({ id: authUser.id, email: authUser.email, isAdmin: authUser.app_metadata?.role === 'admin' });
-      else if (!loadDemoUserEmail()) setUser(null);
+      else setUser(null);
+      setAuthReady(true);
     });
     return () => data.subscription.unsubscribe();
   }, []);
-  useEffect(() => { function escape(event: KeyboardEvent) { if (event.key === 'Escape') { setSelectedCourse(null); setReviewOpen(false); setAuthOpen(false); } } window.addEventListener('keydown', escape); return () => window.removeEventListener('keydown', escape); }, []);
+  useEffect(() => { function escape(event: KeyboardEvent) { if (event.key === 'Escape') { setSelectedCourse(null); setReviewOpen(false); } } window.addEventListener('keydown', escape); return () => window.removeEventListener('keydown', escape); }, []);
   useEffect(() => {
     if (!supabase || !user || user.isDemo) return;
     let active = true;
@@ -95,7 +97,7 @@ function App() {
     const id = crypto.randomUUID(); setToasts((items) => [...items, { id, message, kind }]);
     window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 3600);
   }
-  function requireLogin(action: () => void) { if (!user) { setAuthOpen(true); notify('Student login is required for that action.', 'info'); return; } action(); }
+  function requireLogin(action: () => void) { if (!user) { notify('Your verified session has expired. Please sign in again.', 'error'); return; } action(); }
   function toggleSaved(course: Course) { requireLogin(async () => {
     const saved = savedIds.includes(course.id); const previous = savedIds;
     setSavedIds((ids) => saved ? ids.filter((id) => id !== course.id) : [...ids, course.id]);
@@ -113,7 +115,7 @@ function App() {
   function openReview(course: Course) { setSelectedCourse(null); setReviewCourse(course); setEditingReview(null); setReviewOpen(true); }
   function editReview(review: Review) { const course = courses.find((item) => item.id === review.courseId) ?? null; setSelectedCourse(null); setReviewCourse(course); setEditingReview(review); setReviewOpen(true); }
   async function submitReview(form: NewReviewForm, editingId?: string) {
-    if (!user) { setAuthOpen(true); return; }
+    if (!user) return;
     try {
       if (supabase && !user.isDemo) {
         const payload = { course_id: form.courseId, professor_name: form.professor, semester: form.semester, year: form.year, rating: form.rating, difficulty: form.difficulty, workload_hours: form.workloadHours, attendance_required: form.attendanceRequired, would_take_again: form.wouldTakeAgain, grade: form.grade, reviewer_type: form.reviewerType, comment: form.comment.trim(), status: 'pending' };
@@ -124,8 +126,7 @@ function App() {
       setReviewOpen(false); setEditingReview(null); notify(editingId ? 'Review updated and sent for moderation.' : 'Review added successfully and sent for moderation.', 'success');
     } catch (reason) { notify(reason instanceof Error ? `Review submission failed: ${reason.message}` : 'Review submission failed. Please try again.', 'error'); }
   }
-  async function logout() { if (supabase && !user?.isDemo) await supabase.auth.signOut(); saveDemoUserEmail(null); setUser(null); setSavedIds([]); setPlannerItems([]); setView('dashboard'); notify('You have been logged out.', 'info'); }
-  function demoLogin(email: string) { saveDemoUserEmail(email); setUser({ id: 'demo-student', email, isAdmin: false, isDemo: true }); }
+  async function logout() { if (supabase) await supabase.auth.signOut(); setUser(null); setSavedIds([]); setPlannerItems([]); setView('dashboard'); }
   function exportFile(content: string, filename: string) { const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url); notify('CSV export created.', 'success'); }
   async function copySummary() { const top = filteredCourses.slice(0, 5).map((course) => `${course.code} — ${course.title} · ${course.avgRating}/5 · ${getARate(course)}% A · ${getRecommendationScore(course)}/100 recommendation`).join('\n'); try { await navigator.clipboard.writeText(top); notify('Course summary copied.', 'success'); } catch { notify('Could not copy the course summary.', 'error'); } }
   function importCsv(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const lines = String(reader.result).trim().split(/\r?\n/).slice(1); let updated = 0; setCourses((items) => items.map((course) => { const row = lines.map((line) => line.split(',').map((cell) => cell.trim())).find(([code]) => code?.replace(/"/g, '').toLowerCase() === course.code.toLowerCase()); if (!row) return course; updated += 1; const attendance = row[2]?.replace(/"/g, '').toLowerCase(); return { ...course, workloadHours: Number(row[1]) || course.workloadHours, attendanceRequired: ['yes','true','required'].includes(attendance) }; })); notify(updated ? `Imported manual data for ${updated} courses.` : 'No matching course codes were found in the CSV.', updated ? 'success' : 'error'); } catch { notify('Could not import that CSV. Use columns: course_code, workload_hours, attendance_required.', 'error'); } }; reader.onerror = () => notify('Could not read the selected CSV.', 'error'); reader.readAsText(file); event.target.value = ''; }
@@ -149,8 +150,10 @@ function App() {
     } catch (reason) { notify(reason instanceof Error ? `Could not report review: ${reason.message}` : 'Could not report review.', 'error'); }
   }); }
 
+  if (!user) return <><AuthGate checking={!authReady} onNotice={notify} /><ToastStack toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((item) => item.id !== id))} /></>;
+
   return <>
-    <Header theme={theme} onThemeToggle={() => setTheme((value) => value === 'light' ? 'dark' : 'light')} user={user} onLogin={() => setAuthOpen(true)} onLogout={logout} view={view} onView={setView} savedCount={savedIds.length} />
+    <Header theme={theme} onThemeToggle={() => setTheme((value) => value === 'light' ? 'dark' : 'light')} user={user} onLogin={() => undefined} onLogout={logout} view={view} onView={setView} savedCount={savedIds.length} />
     {view === 'dashboard' && (loading ? <DashboardSkeleton /> : <main className="page-shell">
       <div className="trust-banner"><ShieldCheck size={20} /><div><strong>Private by design</strong><span>SRM email verification only. We never collect NetID or university portal passwords.</span></div></div>
       <Filters courses={courses} filters={filters} onChange={setFilters} onClear={() => { setFilters(defaultFilters); notify('Filters cleared.', 'success'); }} />
@@ -163,16 +166,15 @@ function App() {
       <section className="review-cta card"><div><p className="eyebrow">Pay it forward</p><h2>Taken one of these courses?</h2><p>Your experience can make someone else's semester easier.</p></div><button className="button primary" onClick={() => { setReviewCourse(filteredCourses[0] ?? courses[0]); setReviewOpen(true); }}><Plus size={18} />Write a review</button></section>
     </main>)}
     {view === 'saved' && <><SavedCourses courses={courses} savedIds={savedIds} comparisonIds={comparisonIds} onOpen={setSelectedCourse} onSave={toggleSaved} onCompare={toggleComparison} onExplore={() => setView('dashboard')} /><div className="page-shell comparison-only"><ComparisonPanel courses={comparisonCourses} onRemove={(id) => setComparisonIds((ids) => ids.filter((value) => value !== id))} onClear={() => setComparisonIds([])} onExport={exportFile} /></div></>}
-    {view === 'resources' && <ResourcesHub loggedIn={Boolean(user)} onLogin={() => setAuthOpen(true)} onNotice={(message) => notify(message, 'info')} />}
-    {view === 'planner' && <SemesterPlanner courses={courses} items={plannerItems} onChange={(items) => void updatePlanner(items)} loggedIn={Boolean(user)} onLogin={() => setAuthOpen(true)} onNotice={(message) => notify(message, 'info')} />}
+    {view === 'resources' && <ResourcesHub loggedIn onLogin={() => undefined} onNotice={(message) => notify(message, 'info')} />}
+    {view === 'planner' && <SemesterPlanner courses={courses} items={plannerItems} onChange={(items) => void updatePlanner(items)} loggedIn onLogin={() => undefined} onNotice={(message) => notify(message, 'info')} />}
     {view === 'gpa' && <GpaDashboard courses={courses} records={gpaRecords} onChange={setGpaRecords} />}
     {view === 'timetable' && <TimetableCalendar courses={courses} entries={timetableEntries} onChange={setTimetableEntries} onNotice={(message, error) => notify(message, error ? 'error' : 'success')} />}
     {view === 'professors' && <ProfessorComparison courses={courses} />}
     {view === 'admin' && user?.isAdmin && <AdminDashboard courses={courses} onModerate={moderate} />}
     <Footer />
     <CourseDetail course={visibleSelected} user={user} saved={visibleSelected ? savedIds.includes(visibleSelected.id) : false} compared={visibleSelected ? comparisonIds.includes(visibleSelected.id) : false} onClose={() => setSelectedCourse(null)} onSave={toggleSaved} onCompare={toggleComparison} onReview={openReview} onEditReview={editReview} onReportReview={reportReview} />
-    <ReviewForm open={reviewOpen} courses={courses} course={reviewCourse} user={user} editingReview={editingReview} onClose={() => { setReviewOpen(false); setEditingReview(null); }} onLogin={() => { setReviewOpen(false); setAuthOpen(true); }} onSubmit={submitReview} />
-    <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} onDemoLogin={demoLogin} onNotice={(message, kind) => notify(message, kind)} />
+    <ReviewForm open={reviewOpen} courses={courses} course={reviewCourse} user={user} editingReview={editingReview} onClose={() => { setReviewOpen(false); setEditingReview(null); }} onLogin={() => undefined} onSubmit={submitReview} />
     <ToastStack toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
   </>;
 }

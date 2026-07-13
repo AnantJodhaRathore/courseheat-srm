@@ -2,7 +2,7 @@ import type { Course, GpaRecord, PlannerItem, TimetableEntry } from '../types';
 import { mockCourses } from '../data/mockCourses';
 import { normalizeCourse } from './courseUtils';
 
-const keys = { courses: 'courseheat:courses:v2', saved: 'courseheat:saved', theme: 'courseheat:theme', planner: 'courseheat:planner', gpa: 'courseheat:gpa', timetable: 'courseheat:timetable', demoUser: 'courseheat:demo-user' };
+const keys = { courses: 'courseheat:courses:v2', saved: 'courseheat:saved', theme: 'courseheat:theme', planner: 'courseheat:planner', gpa: 'courseheat:gpa', timetable: 'courseheat:timetable' };
 
 function read<T>(key: string, fallback: T): T {
   try { const value = localStorage.getItem(key); return value ? JSON.parse(value) as T : fallback; } catch { return fallback; }
@@ -32,5 +32,3 @@ export function loadTimetable() { return read<TimetableEntry[]>(keys.timetable, 
   { id: 'tt-6', courseId: 'art105-thompson-spring-2025', day: 'Friday', startTime: '13:00', endTime: '14:00', room: 'Design Studio', type: 'Tutorial' }
 ]); }
 export function saveTimetable(items: TimetableEntry[]) { localStorage.setItem(keys.timetable, JSON.stringify(items)); }
-export function loadDemoUserEmail() { return read<string | null>(keys.demoUser, null); }
-export function saveDemoUserEmail(email: string | null) { email ? localStorage.setItem(keys.demoUser, JSON.stringify(email)) : localStorage.removeItem(keys.demoUser); }
