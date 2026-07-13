@@ -1,0 +1,1 @@
+export function DashboardSkeleton() { return <main className="page-shell"><div className="skeleton filters-skeleton" /><div className="skeleton-grid">{Array.from({length:6},(_,i)=><div className="skeleton stat-skeleton" key={i}/>)}</div><div className="skeleton content-skeleton" /></main>; }

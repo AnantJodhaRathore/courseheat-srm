@@ -1,0 +1,12 @@
+import { CheckCircle2, Flag, ShieldAlert, Trash2, UsersRound } from 'lucide-react';
+import type { Course } from '../types';
+type Props = { courses: Course[]; onModerate: (courseId: string, reviewId: string, action: 'approve' | 'delete') => void };
+export function AdminDashboard({ courses, onModerate }: Props) {
+  const reviews = courses.flatMap((course) => course.reviews.map((review) => ({ course, review })));
+  const pending = reviews.filter(({ review }) => review.status === 'pending' || review.status === 'reported');
+  return <main className="page-shell subpage"><div className="page-heading"><div><p className="eyebrow"><ShieldAlert size={16} />Moderation</p><h1>Admin dashboard</h1><p>Review community submissions and monitor catalog health.</p></div></div>
+    <section className="admin-stats"><div className="card"><Flag /><strong>{pending.length}</strong><span>Needs review</span></div><div className="card"><UsersRound /><strong>{reviews.length}</strong><span>Total reviews</span></div><div className="card"><CheckCircle2 /><strong>{reviews.filter(({review}) => review.status !== 'pending').length}</strong><span>Approved</span></div></section>
+    <section className="card admin-table"><div className="section-heading"><div><p className="eyebrow">Moderation queue</p><h2>Review submissions</h2></div></div>{pending.length ? pending.map(({ course, review }) => <article key={review.id}><div><span>{course.code} · {review.professor ?? course.professor}</span><p>{review.comment}</p><small>{review.createdAt} · {review.status}</small></div><div><button className="button approve compact" onClick={() => onModerate(course.id, review.id, 'approve')}><CheckCircle2 size={15} />Approve</button><button className="button danger compact" onClick={() => onModerate(course.id, review.id, 'delete')}><Trash2 size={15} />Delete</button></div></article>) : <div className="empty-state"><strong>Moderation queue is clear.</strong><span>No pending or reported reviews.</span></div>}</section>
+    <section className="admin-management card"><h2>Catalog management</h2><p>Course, professor, and department editing is ready to connect to protected Supabase admin mutations. Admin roles must come from app metadata, never user-editable profile fields.</p><div><button className="button ghost">Manage professors</button><button className="button ghost">Manage departments</button><button className="button ghost">Edit course data</button></div></section>
+  </main>;
+}
