@@ -36,6 +36,11 @@
 ![Dashboard](src/assets/s3.png)
 ![Dashboard](src/assets/s4.png)
 ![Dashboard](src/assets/s5.png)
+![Dashboard](src/assets/s6.png)
+![Dashboard](src/assets/s7.png)
+![Dashboard](src/assets/s8.png)
+![Dashboard](src/assets/s9.png)
+![Dashboard](src/assets/s10.png)
 
 </div>
 
